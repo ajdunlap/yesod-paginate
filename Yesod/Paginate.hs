@@ -23,16 +23,17 @@ import Yesod
 import Control.Applicative
 import Language.Haskell.TH.Syntax
 
-data Paginate master a = Paginate
+data Paginate master rep a = Paginate
   { pgnDefaultCount :: Int                                                              -- ^ How many items to show per page by default
-  , pgnGetItems     :: Int -> Int -> GHandler (Paginate master a) master [a]            -- ^ Get a certain count of items at a certain offset
-  , pgnItemCount    :: GHandler (Paginate master a) master Int                          -- ^ How many items there are in all
-  , pgnDisplayItems :: Int -> Int -> [a] -> GHandler (Paginate master a) master RepHtml -- ^ Render the items on a page given the count and offset
+  , pgnGetItems     :: Int -> Int -> GHandler (Paginate master rep a) master [a]        -- ^ Get a certain count of items at a certain offset
+  , pgnItemCount    :: GHandler (Paginate master rep a) master Int                      -- ^ How many items there are in all
+  , pgnDisplayItems :: Int -> Int -> [a] -> GHandler (Paginate master rep a) master rep -- ^ Render the items on a page given the count and offset
   }
 
 mkYesodSub
-  "Paginate master a"
+  "Paginate master rep a"
   [ ClassP ''Yesod [VarT $ mkName "master"]
+  , ClassP ''HasReps [VarT $ mkName "rep"]
   ]
 #if GHC7
   [parseRoutes|
@@ -44,31 +45,31 @@ mkYesodSub
 /#Int/#Int  PaginateR       GET
 |]
 
-getPaginateHomeR :: GHandler (Paginate master a) master RepHtml
+getPaginateHomeR :: GHandler (Paginate master rep a) master rep
 getPaginateHomeR = do
   pgn <- getYesodSub
   toMaster <- getRouteToMaster
   redirect RedirectSeeOther (toMaster (PaginateR (pgnDefaultCount pgn) 0))
 
-getPaginateStartR :: Int -> GHandler (Paginate master a) master RepHtml
+getPaginateStartR :: Int -> GHandler (Paginate master rep a) master rep
 getPaginateStartR start = do
   pgn <- getYesodSub
   toMaster <- getRouteToMaster
   redirect RedirectSeeOther (toMaster (PaginateR (pgnDefaultCount pgn) start))
 
-getPaginateR :: Int -> Int -> GHandler (Paginate master a) master RepHtml
+getPaginateR :: Int -> Int -> GHandler (Paginate master rep a) master rep
 getPaginateR howmany start = do
   pgn <- getYesodSub
   xs <- pgnGetItems pgn howmany start
   pgnDisplayItems pgn howmany start xs
 
 defaultPaginate
-  :: (YesodPersist master, PersistBackend (YesodDB master (GHandler (Paginate master a) master)), PersistEntity a)
+  :: (YesodPersist master, PersistBackend (YesodDB master (GHandler (Paginate master rep a) master)), PersistEntity a)
   => Int                                                                -- ^ Default number of items to show
   -> [Filter a]                                                         -- ^ Filters to apply
   -> [Order a]                                                          -- ^ Ordering to apply
-  -> (Int -> Int -> [a] -> GHandler (Paginate master a) master RepHtml) -- ^ Display function
-  -> Paginate master a
+  -> (Int -> Int -> [a] -> GHandler (Paginate master rep a) master rep)     -- ^ Display function
+  -> Paginate master rep a
 defaultPaginate x fs os d = Paginate
   { pgnDefaultCount = x
   , pgnGetItems = \y z -> map snd <$> runDB (selectList fs os y z)
@@ -77,13 +78,13 @@ defaultPaginate x fs os d = Paginate
   }
 
 -- | Link to the previous page.
-prevLink :: Paginate master a -> Int -> Int -> Maybe (Route (Paginate master a))
+prevLink :: Paginate master rep a -> Int -> Int -> Maybe (Route (Paginate master rep a))
 prevLink p howmany start
   | start > 0 = Just (PaginateR howmany (max 0 (start-howmany)))
   | otherwise = Nothing
 
 -- | Link to the next page.
-nextLink :: Paginate master a -> Int -> Int -> GHandler (Paginate master a) master (Maybe (Route (Paginate master a)))
+nextLink :: Paginate master rep a -> Int -> Int -> GHandler (Paginate master rep a) master (Maybe (Route (Paginate master rep a)))
 nextLink p howmany start = go <$> pgnItemCount p where
   go l | start < l-howmany-1 = Just (PaginateR howmany (start+howmany))
        | otherwise           = Nothing

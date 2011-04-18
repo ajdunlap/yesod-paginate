@@ -2,7 +2,7 @@
 -- options, see
 -- http://www.haskell.org/cabal/release/cabal-latest/doc/users-guide/authors.html#pkg-descr.
 Name:                 yesod-paginate
-Version:              0.0
+Version:              0.1
 Synopsis:             Pagination for Yesod sites.
 Description:          
 License:              BSD3
